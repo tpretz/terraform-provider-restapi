@@ -12,6 +12,44 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
+var radiusAttribute := &schema.Resource{
+	Schema: map[string]*schema.Schema{
+		"name": &schema.Schema{
+			Type: schema.String,
+			Required: true,
+			ValidateFunc: validation.StringIsNotWhiteSpace,
+		},
+		"value": &schema.Schema{
+			Type: schema.TypeList,
+			Required: true,
+			Elem: &schema.Schema{
+				Type: schema.TypeString,
+			},
+		},
+		"op": &schema.Schema{
+			Type: schema.TypeString,
+			Optional: true,
+			Default: ":="
+			ValidateFunc: validation.StringInSlice([]string{"=", ":=", "+=", "|=", "|:=", "|+=", "|--"})
+		},
+		"expand": &schema.Schema{
+			Type: schema.TypeBool,
+			Optional: true,
+			Default: false
+		},
+		"do_xlat": &schema.Schema{
+			Type: schema.TypeBool,
+			Optional: true,
+			Default: false
+		},
+		"is_json": &schema.Schema{
+			Type: schema.TypeBool,
+			Optional: true,
+			Default: false
+		},
+	},
+}
+
 func resourceProfile() *schema.Resource {
 	// Consider data sensitive if env variables is set to true.
 
@@ -23,7 +61,7 @@ func resourceProfile() *schema.Resource {
 		Exists: resourceProfileExists,
 
 		Importer: &schema.ResourceImporter{
-			State: resourceProfileImport,
+			State: schema.ImportStatePassthrough,
 		},
 
 		Schema: map[string]*schema.Schema{
@@ -61,175 +99,39 @@ func resourceProfile() *schema.Resource {
 				Optional:     true,
 				ValidateFunc: validation.StringIsJSON,
 			},
-			"create_path": {
-				Type:        schema.TypeString,
-				Description: "Defaults to `path`. The API path that represents where to CREATE (POST) objects of this type on the API server. The string `{id}` will be replaced with the terraform ID of the object if the data contains the `id_attribute`.",
-				Optional:    true,
+			"reply": {
+				Type:         schema.TypeList,
+				Optional:     true,
+				Elem: radiusAttribute,
 			},
-			"read_path": {
-				Type:        schema.TypeString,
-				Description: "Defaults to `path/{id}`. The API path that represents where to READ (GET) objects of this type on the API server. The string `{id}` will be replaced with the terraform ID of the object.",
-				Optional:    true,
-			},
-			"update_path": {
-				Type:        schema.TypeString,
-				Description: "Defaults to `path/{id}`. The API path that represents where to UPDATE (PUT) objects of this type on the API server. The string `{id}` will be replaced with the terraform ID of the object.",
-				Optional:    true,
-			},
-			"create_method": {
-				Type:        schema.TypeString,
-				Description: "Defaults to `create_method` set on the provider. Allows per-resource override of `create_method` (see `create_method` provider config documentation)",
-				Optional:    true,
-			},
-			"read_method": {
-				Type:        schema.TypeString,
-				Description: "Defaults to `read_method` set on the provider. Allows per-resource override of `read_method` (see `read_method` provider config documentation)",
-				Optional:    true,
-			},
-			"update_method": {
-				Type:        schema.TypeString,
-				Description: "Defaults to `update_method` set on the provider. Allows per-resource override of `update_method` (see `update_method` provider config documentation)",
-				Optional:    true,
-			},
-			"destroy_method": {
-				Type:        schema.TypeString,
-				Description: "Defaults to `destroy_method` set on the provider. Allows per-resource override of `destroy_method` (see `destroy_method` provider config documentation)",
-				Optional:    true,
-			},
-			"destroy_path": {
-				Type:        schema.TypeString,
-				Description: "Defaults to `path/{id}`. The API path that represents where to DESTROY (DELETE) objects of this type on the API server. The string `{id}` will be replaced with the terraform ID of the object.",
-				Optional:    true,
-			},
-			"id_attribute": {
-				Type:        schema.TypeString,
-				Description: "Defaults to `id_attribute` set on the provider. Allows per-resource override of `id_attribute` (see `id_attribute` provider config documentation)",
-				Optional:    true,
-			},
-			"object_id": {
-				Type:        schema.TypeString,
-				Description: "Defaults to the id learned by the provider during normal operations and `id_attribute`. Allows you to set the id manually. This is used in conjunction with the `*_path` attributes.",
-				Optional:    true,
-			},
-			"data": {
-				Type:        schema.TypeString,
-				Description: "Valid JSON data that this provider will manage with the API server.",
-				Required:    true,
-				Sensitive:   isDataSensitive,
-				ValidateFunc: func(val interface{}, key string) (warns []string, errs []error) {
-					v := val.(string)
-					if v != "" {
-						data := make(map[string]interface{})
-						err := json.Unmarshal([]byte(v), &data)
-						if err != nil {
-							errs = append(errs, fmt.Errorf("data attribute is invalid JSON: %v", err))
-						}
-					}
-					return warns, errs
-				},
-			},
-			"debug": {
-				Type:        schema.TypeBool,
-				Description: "Whether to emit verbose debug output while working with the API object on the server.",
-				Optional:    true,
-			},
-			"read_search": {
-				Type:        schema.TypeMap,
-				Description: "Custom search for `read_path`. This map will take `search_key`, `search_value`, `results_key` and `query_string` (see datasource config documentation)",
-				Optional:    true,
-			},
-			"query_string": {
-				Type:        schema.TypeString,
-				Description: "Query string to be included in the path",
-				Optional:    true,
-			},
-			"api_data": {
-				Type: schema.TypeMap,
-				Elem: &schema.Schema{
-					Type: schema.TypeString,
-				},
-				Description: "After data from the API server is read, this map will include k/v pairs usable in other terraform resources as readable objects. Currently the value is the golang fmt package's representation of the value (simple primitives are set as expected, but complex types like arrays and maps contain golang formatting).",
-				Computed:    true,
-				Sensitive:   isDataSensitive,
-			},
-			"api_response": {
-				Type:        schema.TypeString,
-				Description: "The raw body of the HTTP response from the last read of the object.",
-				Computed:    true,
-				Sensitive:   isDataSensitive,
-			},
-			"create_response": {
-				Type:        schema.TypeString,
-				Description: "The raw body of the HTTP response returned when creating the object.",
-				Computed:    true,
-				Sensitive:   isDataSensitive,
-			},
-			"force_new": {
-				Type:        schema.TypeList,
-				Elem:        &schema.Schema{Type: schema.TypeString},
-				Optional:    true,
-				ForceNew:    true,
-				Description: "Any changes to these values will result in recreating the resource instead of updating.",
+			"control": {
+				Type:         schema.TypeList,
+				Optional:     true,
+				Elem: radiusAttribute,
 			},
 		}, /* End schema */
-
 	}
 }
 
-/* Since there is nothing in the ResourceData structure other
-   than the "id" passed on the command line, we have to use an opinionated
-   view of the API paths to figure out how to read that object
-   from the API */
-func resourceProfileImport(d *schema.ResourceData, meta interface{}) (imported []*schema.ResourceData, err error) {
-	input := d.Id()
+func buildProfileObject(d *schema.ResourceData, api *APIClient) (interface{}, error) {
 
-	hasTrailingSlash := strings.HasSuffix(input, "/")
-	var n int
-	if hasTrailingSlash {
-		n = strings.LastIndex(input[0:len(input)-1], "/")
-	} else {
-		n = strings.LastIndex(input, "/")
-	}
-
-	if n == -1 {
-		return imported, fmt.Errorf("invalid path to import api_object '%s' - must be /<full path from server root>/<object id>", input)
-	}
-
-	path := input[0:n]
-	d.Set("path", path)
-
-	var id string
-	if hasTrailingSlash {
-		id = input[n+1 : len(input)-1]
-	} else {
-		id = input[n+1:]
-	}
-
-	d.Set("data", fmt.Sprintf(`{ "id": "%s" }`, id))
-	d.SetId(id)
-
-	/* Troubleshooting is hard enough. Emit log messages so TF_LOG
-	   has useful information in case an import isn't working */
-	d.Set("debug", true)
-
-	obj, err := makeAPIObject(d, meta)
-	if err != nil {
-		return imported, err
-	}
-	log.Printf("resource_api_object.go: Import routine called. Object built:\n%s\n", obj.toString())
-
-	err = obj.readObject()
-	if err == nil {
-		setResourceState(obj, d)
-		/* Data that we set in the state above must be passed along
-		   as an item in the stack of imported data */
-		imported = append(imported, d)
-	}
-
-	return imported, err
 }
 
 func resourceProfileCreate(d *schema.ResourceData, meta interface{}) error {
+	api := meta.(*APIClient)
+
+	itm, err := buildProfileObject(d, api)
+
+	if err != nil {
+		return err
+	}
+
+	// do add
+
+	return resourceProfileRead(d, m)
+}
+
+
 	obj, err := makeAPIObject(d, meta)
 	if err != nil {
 		return err
