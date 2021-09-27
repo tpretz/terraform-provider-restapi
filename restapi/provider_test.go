@@ -35,17 +35,12 @@ func TestResourceProvider_RequireBasic(t *testing.T) {
 
 	raw := map[string]interface{}{}
 
-	rawConfig, err := config.NewRawConfig(raw)
-	if err != nil {
-		t.Fatalf("err: %s", err)
-	}
-
 	/*
 	   XXX: This is expected to work even though we are not
 	        explicitly declaring the required url parameter since
 	        the test suite is run with the ENV entry set.
 	*/
-	err = rp.Configure(terraform.NewResourceConfig(rawConfig))
+	err = rp.Configure(terraform.NewResourceConfigRaw(raw))
 	if err != nil {
 		t.Fatalf("Provider failed with error: %s", err)
 	}
@@ -67,17 +62,12 @@ func TestResourceProvider_Oauth(t *testing.T) {
 		},
 	}
 
-	rawConfig, err := config.NewRawConfig(raw)
-	if err != nil {
-		t.Fatalf("err: %s", err)
-	}
-
 	/*
 	   XXX: This is expected to work even though we are not
 	        explicitly declaring the required url parameter since
 	        the test suite is run with the ENV entry set.
 	*/
-	err = rp.Configure(terraform.NewResourceConfig(rawConfig))
+	err = rp.Configure(terraform.NewResourceConfigRaw(raw))
 	if err != nil {
 		t.Fatalf("Provider failed with error: %s", err)
 	}
@@ -96,12 +86,7 @@ func TestResourceProvider_RequireTestPath(t *testing.T) {
 		"test_path": "/api/objects",
 	}
 
-	rawConfig, err := config.NewRawConfig(raw)
-	if err != nil {
-		t.Fatalf("err: %s", err)
-	}
-
-	err = rp.Configure(terraform.NewResourceConfig(rawConfig))
+	err = rp.Configure(terraform.NewResourceConfigRaw(raw))
 	if err != nil {
 		t.Fatalf("Explicit provider configuration failed with error: %s", err)
 	}
@@ -113,12 +98,7 @@ func TestResourceProvider_RequireTestPath(t *testing.T) {
 		"test_path": "/api/apaththatdoesnotexist",
 	}
 
-	rawConfig, err = config.NewRawConfig(raw)
-	if err != nil {
-		t.Fatalf("err: %s", err)
-	}
-
-	err = rp.Configure(terraform.NewResourceConfig(rawConfig))
+	err = rp.Configure(terraform.NewResourceConfigRaw(raw))
 	if err == nil {
 		t.Fatalf("Provider was expected to fail when visiting %v at %v but it did not!", raw["test_path"], raw["uri"])
 	}
