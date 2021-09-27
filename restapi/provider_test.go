@@ -5,9 +5,8 @@ import (
 
 	"github.com/Mastercard/terraform-provider-restapi/fakeserver"
 
-	"github.com/hashicorp/terraform/config"
-	"github.com/hashicorp/terraform/helper/schema"
-	"github.com/hashicorp/terraform/terraform"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/terraform"
 )
 
 var testAccProvider terraform.ResourceProvider
