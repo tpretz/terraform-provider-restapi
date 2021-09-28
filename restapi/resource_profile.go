@@ -12,7 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
-var radiusAttribute := &schema.Resource{
+var radiusAttribute = &schema.Resource{
 	Schema: map[string]*schema.Schema{
 		"name": &schema.Schema{
 			Type: schema.String,
@@ -58,7 +58,7 @@ func resourceProfile() *schema.Resource {
 		Read:   resourceProfileRead,
 		Update: resourceProfileUpdate,
 		Delete: resourceProfileDelete,
-		Exists: resourceProfileExists,
+	//	Exists: resourceProfileExists,
 
 		Importer: &schema.ResourceImporter{
 			State: schema.ImportStatePassthrough,
@@ -113,8 +113,79 @@ func resourceProfile() *schema.Resource {
 	}
 }
 
-func buildProfileObject(d *schema.ResourceData, api *APIClient) (interface{}, error) {
+type RadiusAttribute struct {
+	Name string `json:"name"`
+	Value []string `json:"value"`
+	OP string `json:"op,omitempty"`
+	Expand bool `json:"expand"`
+	DoXlat bool `json:"do_xlat"`
+	IsJson bool `json:"is_json"`
+}
 
+type RadiusProfileAttributes struct {
+	Reply []RadiusAttribute `json:"reply,omitempty"`
+	Control []RadiusAttribute `json:"control,omitempty"`
+}
+
+type RadiusProfile struct {
+	ID string `json:"id"`
+	State string `json:"state"`
+	Weight int `json:"weight"`
+	Depends []string `json:"depends,omitempty"`
+	Description string `json:"description,omitempty"`
+	Radius RadiusProfileAttributes `json:"radius"`
+	Schema interface{} `json:"parameter_schema,omitempty"`
+}
+
+func buildProfileObject(d *schema.ResourceData, api *APIClient) (interface{}, error) {
+	itm := RadiusProfile{
+		ID: d.Get("id").(string),
+		State: d.Get("enabled").(bool) ? "enabled" : "disabled",
+		Weight: d.Get("weight").(string),
+		Description: d.Get("description").(string), // move to optional
+	}
+	
+	// optionals
+
+	// depends
+	dependsCount := d.Get("depends.#").(int)
+	depends := make([]string, dependsCount)
+	for i := 0; i < dependsCount; i++ {
+		depends[i] = d.Get("depends.%d", i)
+	}
+	itm.Depends = depends
+
+	pa := RadiusProfileAttributes{}
+	// radius profiles
+	for _, v := range ["reply", "control"] {
+		count := d.Get(v+".#").(int)
+		attributes := make([]RadiusAttribute, count)
+		for i := 0; i < count; i++ {
+			prefix := fmt.Sprintf("%s.%d.", v, i)
+			attr := RadiusAttribute{
+				Name: d.Get(prefix+"name").(string),
+				OP: d.Get(prefix+"op").(string),
+				Expand: d.Get(prefix+"expand").(bool),
+				DoXlat: d.Get(prefix+"do_xlat").(bool),
+				IsJson: d.Get(prefix+"is_json").(bool),
+			}
+			countValues := d.Get(prefix+"value.#")
+			values := make([]string, countValues)
+			for j := 0; j < countValues; j++ {
+				values[j] = d.Get(prefix+"value."+j).(string)
+			}
+			attr.Value = values
+			attributes[i] = attr
+		}
+		if v == "reply" {
+			pa.Reply = attributes
+		} else {
+			pa.Control = attributes
+		}
+	}
+	itm.Radius = pa
+
+	// schema
 }
 
 func resourceProfileCreate(d *schema.ResourceData, meta interface{}) error {
@@ -125,31 +196,25 @@ func resourceProfileCreate(d *schema.ResourceData, meta interface{}) error {
 	if err != nil {
 		return err
 	}
+	log.Printf("resource_profile.go: Create routine called. Object built:\n%s\n", itm.toString())
 
 	// do add
 
 	return resourceProfileRead(d, m)
 }
 
+func getProfile(api *APIClient, id string) (obj *RadiusProfile, err error) {
 
-	obj, err := makeAPIObject(d, meta)
-	if err != nil {
-		return err
-	}
-	log.Printf("resource_api_object.go: Create routine called. Object built:\n%s\n", obj.toString())
-
-	err = obj.createObject()
-	if err == nil {
-		/* Setting terraform ID tells terraform the object was created or it exists */
-		d.SetId(obj.id)
-		setResourceState(obj, d)
-		/* Only set during create for APIs that don't return sensitive data on subsequent retrieval */
-		d.Set("create_response", obj.apiResponse)
-	}
-	return err
 }
 
 func resourceProfileRead(d *schema.ResourceData, meta interface{}) error {
+	api := meta.(*APIClient)
+
+	obj, err := getProfile(api, d.Id())
+
+	d.SetId(obj.ID)
+
+
 	obj, err := makeAPIObject(d, meta)
 	if err != nil {
 		if strings.Contains(err.Error(), "error parsing data provided") {
