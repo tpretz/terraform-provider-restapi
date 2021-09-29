@@ -29,7 +29,7 @@ var radiusAttribute = &schema.Resource{
 		"op": &schema.Schema{
 			Type: schema.TypeString,
 			Optional: true,
-			Default: ":="
+			Default: ":=",
 			ValidateFunc: validation.StringInSlice([]string{"=", ":=", "+=", "|=", "|:=", "|+=", "|--"})
 		},
 		"expand": &schema.Schema{
@@ -213,6 +213,37 @@ func resourceProfileRead(d *schema.ResourceData, meta interface{}) error {
 	obj, err := getProfile(api, d.Id())
 
 	d.SetId(obj.ID)
+	d.Set("enabled", obj.State == "enabled")
+	d.Set("weight", obj.Weight)
+	d.Set("description", obj.Description)
+
+	// multi
+	dependsList := make([]interface{}, length(obj.Depends))
+	for i, v := range obj.Depends {
+		dependsList[i] = v
+	}
+	d.Set("depends", dependsList)
+
+	d.Set("reply")
+	replyList := make([]interface{}, length(obj.RadiusProfileAttributes.Reply))
+	for i, v := range obj.RadiusProfileAttributes.Reply {
+		c := obj.RadiusProfileAttributes.Reply[i]
+		t := map[string]interface{}{
+			"name": c.Name,
+			"op": c.OP,
+			"expand": c.Expand,
+			"do_xlat": c.DoXlat,
+			"is_json": c.IsJson,
+		}
+		valueList := make([]interface{}, length(c.Value))
+		for ii, vv := range c.Value {
+			valueList[ii] = vv
+		}
+		t["value"] = valueList
+		replyList[i] = t
+	}
+	d.Set("control")
+	d.Set("parameter_schema")
 
 
 	obj, err := makeAPIObject(d, meta)
