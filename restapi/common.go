@@ -6,21 +6,19 @@ import (
 	"os"
 	"strconv"
 	"strings"
-
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 /* After any operation that returns API data, we'll stuff
    all the k,v pairs into the api_data map so users can
    consume the values elsewhere if they'd like */
-func setResourceState(obj *APIObject, d *schema.ResourceData) {
-	apiData := make(map[string]string)
-	for k, v := range obj.apiData {
-		apiData[k] = fmt.Sprintf("%v", v)
-	}
-	d.Set("api_data", apiData)
-	d.Set("api_response", obj.apiResponse)
-}
+// func setResourceState(obj *APIObject, d *schema.ResourceData) {
+// 	apiData := make(map[string]string)
+// 	for k, v := range obj.apiData {
+// 		apiData[k] = fmt.Sprintf("%v", v)
+// 	}
+// 	d.Set("api_data", apiData)
+// 	d.Set("api_response", obj.apiResponse)
+// }
 
 /*GetStringAtKey uses GetObjectAtKey to verify the resulting
   object is either a JSON string or Number and returns it as a string */

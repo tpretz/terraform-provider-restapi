@@ -26,15 +26,6 @@ type apiClientOpt struct {
 	password            string
 	headers             map[string]string
 	timeout             int
-	idAttribute         string
-	createMethod        string
-	readMethod          string
-	updateMethod        string
-	destroyMethod       string
-	copyKeys            []string
-	writeReturnsObject  bool
-	createReturnsObject bool
-	xssiPrefix          string
 	useCookies          bool
 	rateLimit           float64
 	oauthClientID       string
@@ -49,24 +40,15 @@ type apiClientOpt struct {
 
 /*APIClient is a HTTP client with additional controlling fields*/
 type APIClient struct {
-	httpClient          *http.Client
-	uri                 string
-	insecure            bool
-	username            string
-	password            string
-	headers             map[string]string
-	idAttribute         string
-	createMethod        string
-	readMethod          string
-	updateMethod        string
-	destroyMethod       string
-	copyKeys            []string
-	writeReturnsObject  bool
-	createReturnsObject bool
-	xssiPrefix          string
-	rateLimiter         *rate.Limiter
-	debug               bool
-	oauthConfig         *clientcredentials.Config
+	httpClient  *http.Client
+	uri         string
+	insecure    bool
+	username    string
+	password    string
+	headers     map[string]string
+	rateLimiter *rate.Limiter
+	debug       bool
+	oauthConfig *clientcredentials.Config
 }
 
 //NewAPIClient makes a new api client for RESTful calls
@@ -79,28 +61,10 @@ func NewAPIClient(opt *apiClientOpt) (*APIClient, error) {
 		return nil, errors.New("uri must be set to construct an API client")
 	}
 
-	/* Sane default */
-	if opt.idAttribute == "" {
-		opt.idAttribute = "id"
-	}
-
 	/* Remove any trailing slashes since we will append
 	   to this URL with our own root-prefixed location */
 	if strings.HasSuffix(opt.uri, "/") {
 		opt.uri = opt.uri[:len(opt.uri)-1]
-	}
-
-	if opt.createMethod == "" {
-		opt.createMethod = "POST"
-	}
-	if opt.readMethod == "" {
-		opt.readMethod = "GET"
-	}
-	if opt.updateMethod == "" {
-		opt.updateMethod = "PUT"
-	}
-	if opt.destroyMethod == "" {
-		opt.destroyMethod = "DELETE"
 	}
 
 	tlsConfig := &tls.Config{
@@ -138,22 +102,13 @@ func NewAPIClient(opt *apiClientOpt) (*APIClient, error) {
 			Transport: tr,
 			Jar:       cookieJar,
 		},
-		rateLimiter:         rateLimiter,
-		uri:                 opt.uri,
-		insecure:            opt.insecure,
-		username:            opt.username,
-		password:            opt.password,
-		headers:             opt.headers,
-		idAttribute:         opt.idAttribute,
-		createMethod:        opt.createMethod,
-		readMethod:          opt.readMethod,
-		updateMethod:        opt.updateMethod,
-		destroyMethod:       opt.destroyMethod,
-		copyKeys:            opt.copyKeys,
-		writeReturnsObject:  opt.writeReturnsObject,
-		createReturnsObject: opt.createReturnsObject,
-		xssiPrefix:          opt.xssiPrefix,
-		debug:               opt.debug,
+		rateLimiter: rateLimiter,
+		uri:         opt.uri,
+		insecure:    opt.insecure,
+		username:    opt.username,
+		password:    opt.password,
+		headers:     opt.headers,
+		debug:       opt.debug,
 	}
 
 	if opt.oauthClientID != "" && opt.oauthClientSecret != "" && opt.oauthTokenURL != "" {
@@ -180,15 +135,9 @@ func (client *APIClient) toString() string {
 	buffer.WriteString(fmt.Sprintf("insecure: %t\n", client.insecure))
 	buffer.WriteString(fmt.Sprintf("username: %s\n", client.username))
 	buffer.WriteString(fmt.Sprintf("password: %s\n", client.password))
-	buffer.WriteString(fmt.Sprintf("id_attribute: %s\n", client.idAttribute))
-	buffer.WriteString(fmt.Sprintf("write_returns_object: %t\n", client.writeReturnsObject))
-	buffer.WriteString(fmt.Sprintf("create_returns_object: %t\n", client.createReturnsObject))
 	buffer.WriteString("headers:\n")
 	for k, v := range client.headers {
 		buffer.WriteString(fmt.Sprintf("  %s: %s\n", k, v))
-	}
-	for _, n := range client.copyKeys {
-		buffer.WriteString(fmt.Sprintf("  %s", n))
 	}
 	return buffer.String()
 }
@@ -294,7 +243,7 @@ func (client *APIClient) sendRequest(method string, path string, data string) (s
 	if err2 != nil {
 		return "", err2
 	}
-	body := strings.TrimPrefix(string(bodyBytes), client.xssiPrefix)
+	body := string(bodyBytes)
 	if client.debug {
 		log.Printf("api_client.go: BODY:\n%s\n", body)
 	}

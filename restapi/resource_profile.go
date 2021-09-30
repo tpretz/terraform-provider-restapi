@@ -1,12 +1,9 @@
 package restapi
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"regexp"
-	"runtime"
-	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
@@ -15,37 +12,37 @@ import (
 var radiusAttribute = &schema.Resource{
 	Schema: map[string]*schema.Schema{
 		"name": &schema.Schema{
-			Type: schema.String,
-			Required: true,
+			Type:         schema.TypeString,
+			Required:     true,
 			ValidateFunc: validation.StringIsNotWhiteSpace,
 		},
 		"value": &schema.Schema{
-			Type: schema.TypeList,
+			Type:     schema.TypeList,
 			Required: true,
 			Elem: &schema.Schema{
 				Type: schema.TypeString,
 			},
 		},
 		"op": &schema.Schema{
-			Type: schema.TypeString,
-			Optional: true,
-			Default: ":=",
-			ValidateFunc: validation.StringInSlice([]string{"=", ":=", "+=", "|=", "|:=", "|+=", "|--"})
+			Type:         schema.TypeString,
+			Optional:     true,
+			Default:      ":=",
+			ValidateFunc: validation.StringInSlice([]string{"=", ":=", "+=", "|=", "|:=", "|+=", "|--"}, false),
 		},
 		"expand": &schema.Schema{
-			Type: schema.TypeBool,
+			Type:     schema.TypeBool,
 			Optional: true,
-			Default: false
+			Default:  false,
 		},
 		"do_xlat": &schema.Schema{
-			Type: schema.TypeBool,
+			Type:     schema.TypeBool,
 			Optional: true,
-			Default: false
+			Default:  false,
 		},
 		"is_json": &schema.Schema{
-			Type: schema.TypeBool,
+			Type:     schema.TypeBool,
 			Optional: true,
-			Default: false
+			Default:  false,
 		},
 	},
 }
@@ -56,9 +53,9 @@ func resourceProfile() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceProfileCreate,
 		Read:   resourceProfileRead,
-		Update: resourceProfileUpdate,
-		Delete: resourceProfileDelete,
-	//	Exists: resourceProfileExists,
+		//Update: resourceProfileUpdate,
+		//Delete: resourceProfileDelete,
+		//	Exists: resourceProfileExists,
 
 		Importer: &schema.ResourceImporter{
 			State: schema.ImportStatePassthrough,
@@ -100,79 +97,83 @@ func resourceProfile() *schema.Resource {
 				ValidateFunc: validation.StringIsJSON,
 			},
 			"reply": {
-				Type:         schema.TypeList,
-				Optional:     true,
-				Elem: radiusAttribute,
+				Type:     schema.TypeList,
+				Optional: true,
+				Elem:     radiusAttribute,
 			},
 			"control": {
-				Type:         schema.TypeList,
-				Optional:     true,
-				Elem: radiusAttribute,
+				Type:     schema.TypeList,
+				Optional: true,
+				Elem:     radiusAttribute,
 			},
 		}, /* End schema */
 	}
 }
 
 type RadiusAttribute struct {
-	Name string `json:"name"`
-	Value []string `json:"value"`
-	OP string `json:"op,omitempty"`
-	Expand bool `json:"expand"`
-	DoXlat bool `json:"do_xlat"`
-	IsJson bool `json:"is_json"`
+	Name   string   `json:"name"`
+	Value  []string `json:"value"`
+	OP     string   `json:"op,omitempty"`
+	Expand bool     `json:"expand"`
+	DoXlat bool     `json:"do_xlat"`
+	IsJson bool     `json:"is_json"`
 }
 
 type RadiusProfileAttributes struct {
-	Reply []RadiusAttribute `json:"reply,omitempty"`
+	Reply   []RadiusAttribute `json:"reply,omitempty"`
 	Control []RadiusAttribute `json:"control,omitempty"`
 }
 
 type RadiusProfile struct {
-	ID string `json:"id"`
-	State string `json:"state"`
-	Weight int `json:"weight"`
-	Depends []string `json:"depends,omitempty"`
-	Description string `json:"description,omitempty"`
-	Radius RadiusProfileAttributes `json:"radius"`
-	Schema interface{} `json:"parameter_schema,omitempty"`
+	ID          string                  `json:"id"`
+	State       string                  `json:"state"`
+	Weight      int                     `json:"weight"`
+	Depends     []string                `json:"depends,omitempty"`
+	Description string                  `json:"description,omitempty"`
+	Radius      RadiusProfileAttributes `json:"radius"`
+	Schema      interface{}             `json:"parameter_schema,omitempty"`
 }
 
-func buildProfileObject(d *schema.ResourceData, api *APIClient) (interface{}, error) {
+func buildProfileObject(d *schema.ResourceData, api *APIClient) (*RadiusProfile, error) {
 	itm := RadiusProfile{
-		ID: d.Get("id").(string),
-		State: d.Get("enabled").(bool) ? "enabled" : "disabled",
-		Weight: d.Get("weight").(string),
+		ID:          d.Get("id").(string),
+		Weight:      d.Get("weight").(int),
 		Description: d.Get("description").(string), // move to optional
 	}
-	
+	if d.Get("enabled").(bool) {
+		itm.State = "enabled"
+	} else {
+		itm.State = "disabled"
+	}
+
 	// optionals
 
 	// depends
 	dependsCount := d.Get("depends.#").(int)
 	depends := make([]string, dependsCount)
 	for i := 0; i < dependsCount; i++ {
-		depends[i] = d.Get("depends.%d", i)
+		depends[i] = d.Get(fmt.Sprintf("depends.%d", i)).(string)
 	}
 	itm.Depends = depends
 
 	pa := RadiusProfileAttributes{}
 	// radius profiles
-	for _, v := range ["reply", "control"] {
-		count := d.Get(v+".#").(int)
+	for _, v := range []string{"reply", "control"} {
+		count := d.Get(v + ".#").(int)
 		attributes := make([]RadiusAttribute, count)
 		for i := 0; i < count; i++ {
 			prefix := fmt.Sprintf("%s.%d.", v, i)
 			attr := RadiusAttribute{
-				Name: d.Get(prefix+"name").(string),
-				OP: d.Get(prefix+"op").(string),
-				Expand: d.Get(prefix+"expand").(bool),
-				DoXlat: d.Get(prefix+"do_xlat").(bool),
-				IsJson: d.Get(prefix+"is_json").(bool),
+				Name:   d.Get(prefix + "name").(string),
+				OP:     d.Get(prefix + "op").(string),
+				Expand: d.Get(prefix + "expand").(bool),
+				DoXlat: d.Get(prefix + "do_xlat").(bool),
+				IsJson: d.Get(prefix + "is_json").(bool),
 			}
-			countValues := d.Get(prefix+"value.#")
+			countValues := d.Get(prefix + "value.#").(int)
 			values := make([]string, countValues)
 			for j := 0; j < countValues; j++ {
-				values[j] = d.Get(prefix+"value."+j).(string)
+				values[j] = d.Get(fmt.Sprintf("%svalue.%d", prefix, j)).(string)
 			}
 			attr.Value = values
 			attributes[i] = attr
@@ -186,6 +187,8 @@ func buildProfileObject(d *schema.ResourceData, api *APIClient) (interface{}, er
 	itm.Radius = pa
 
 	// schema
+
+	return &itm, nil
 }
 
 func resourceProfileCreate(d *schema.ResourceData, meta interface{}) error {
@@ -196,21 +199,25 @@ func resourceProfileCreate(d *schema.ResourceData, meta interface{}) error {
 	if err != nil {
 		return err
 	}
-	log.Printf("resource_profile.go: Create routine called. Object built:\n%s\n", itm.toString())
+	log.Printf("resource_profile.go: Create routine called. Object built:\n%+v\n", itm)
 
 	// do add
 
-	return resourceProfileRead(d, m)
+	return resourceProfileRead(d, meta)
 }
 
 func getProfile(api *APIClient, id string) (obj *RadiusProfile, err error) {
 
+	return nil, nil
 }
 
 func resourceProfileRead(d *schema.ResourceData, meta interface{}) error {
 	api := meta.(*APIClient)
 
 	obj, err := getProfile(api, d.Id())
+	if err != nil {
+		return err
+	}
 
 	d.SetId(obj.ID)
 	d.Set("enabled", obj.State == "enabled")
@@ -218,204 +225,202 @@ func resourceProfileRead(d *schema.ResourceData, meta interface{}) error {
 	d.Set("description", obj.Description)
 
 	// multi
-	dependsList := make([]interface{}, length(obj.Depends))
+	dependsList := make([]interface{}, len(obj.Depends))
 	for i, v := range obj.Depends {
 		dependsList[i] = v
 	}
 	d.Set("depends", dependsList)
 
-	d.Set("reply")
-	replyList := make([]interface{}, length(obj.RadiusProfileAttributes.Reply))
-	for i, v := range obj.RadiusProfileAttributes.Reply {
-		c := obj.RadiusProfileAttributes.Reply[i]
+	replyList := make([]interface{}, len(obj.Radius.Reply))
+	for i, c := range obj.Radius.Reply {
 		t := map[string]interface{}{
-			"name": c.Name,
-			"op": c.OP,
-			"expand": c.Expand,
+			"name":    c.Name,
+			"op":      c.OP,
+			"expand":  c.Expand,
 			"do_xlat": c.DoXlat,
 			"is_json": c.IsJson,
 		}
-		valueList := make([]interface{}, length(c.Value))
+		valueList := make([]interface{}, len(c.Value))
 		for ii, vv := range c.Value {
 			valueList[ii] = vv
 		}
 		t["value"] = valueList
 		replyList[i] = t
 	}
-	d.Set("control")
-	d.Set("parameter_schema")
+	d.Set("reply", replyList)
 
-
-	obj, err := makeAPIObject(d, meta)
-	if err != nil {
-		if strings.Contains(err.Error(), "error parsing data provided") {
-			log.Printf("resource_api_object.go: WARNING! The data passed from Terraform's state is invalid! %v", err)
-			log.Printf("resource_api_object.go: Continuing with partially constructed object...")
-		} else {
-			return err
+	controlList := make([]interface{}, len(obj.Radius.Control))
+	for i, c := range obj.Radius.Control {
+		t := map[string]interface{}{
+			"name":    c.Name,
+			"op":      c.OP,
+			"expand":  c.Expand,
+			"do_xlat": c.DoXlat,
+			"is_json": c.IsJson,
 		}
-	}
-	log.Printf("resource_api_object.go: Read routine called. Object built:\n%s\n", obj.toString())
-
-	err = obj.readObject()
-	if err == nil {
-		/* Setting terraform ID tells terraform the object was created or it exists */
-		log.Printf("resource_api_object.go: Read resource. Returned id is '%s'\n", obj.id)
-		d.SetId(obj.id)
-		setResourceState(obj, d)
-	}
-	return err
-}
-
-func resourceProfileUpdate(d *schema.ResourceData, meta interface{}) error {
-	obj, err := makeAPIObject(d, meta)
-	if err != nil {
-		return err
-	}
-
-	/* If copy_keys is not empty, we have to grab the latest
-	   data so we can copy anything needed before the update */
-	client := meta.(*APIClient)
-	if len(client.copyKeys) > 0 {
-		err = obj.readObject()
-		if err != nil {
-			return err
+		valueList := make([]interface{}, len(c.Value))
+		for ii, vv := range c.Value {
+			valueList[ii] = vv
 		}
+		t["value"] = valueList
+		controlList[i] = t
 	}
+	d.Set("control", controlList)
 
-	log.Printf("resource_api_object.go: Update routine called. Object built:\n%s\n", obj.toString())
-
-	err = obj.updateObject()
-	if err == nil {
-		setResourceState(obj, d)
-	}
-	return err
+	//
+	//d.Set("parameter_schema")
+	return nil
 }
 
-func resourceProfileDelete(d *schema.ResourceData, meta interface{}) error {
-	obj, err := makeAPIObject(d, meta)
-	if err != nil {
-		return err
-	}
-	log.Printf("resource_api_object.go: Delete routine called. Object built:\n%s\n", obj.toString())
+// func resourceProfileUpdate(d *schema.ResourceData, meta interface{}) error {
+// 	obj, err := makeAPIObject(d, meta)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	err = obj.deleteObject()
-	if err != nil {
-		if strings.Contains(err.Error(), "404") {
-			/* 404 means it doesn't exist. Call that good enough */
-			err = nil
-		}
-	}
-	return err
-}
+// 	/* If copy_keys is not empty, we have to grab the latest
+// 	   data so we can copy anything needed before the update */
+// 	client := meta.(*APIClient)
+// 	if len(client.copyKeys) > 0 {
+// 		err = obj.readObject()
+// 		if err != nil {
+// 			return err
+// 		}
+// 	}
 
-func resourceProfileExists(d *schema.ResourceData, meta interface{}) (exists bool, err error) {
-	obj, err := makeAPIObject(d, meta)
-	if err != nil {
-		if strings.Contains(err.Error(), "error parsing data provided") {
-			log.Printf("resource_api_object.go: WARNING! The data passed from Terraform's state is invalid! %v", err)
-			log.Printf("resource_api_object.go: Continuing with partially constructed object...")
-		} else {
-			return exists, err
-		}
-	}
-	log.Printf("resource_api_object.go: Exists routine called. Object built: %s\n", obj.toString())
+// 	log.Printf("resource_api_object.go: Update routine called. Object built:\n%s\n", obj.toString())
 
-	/* Assume all errors indicate the object just doesn't exist.
-	This may not be a good assumption... */
-	err = obj.readObject()
-	if err == nil {
-		exists = true
-	}
-	return exists, err
-}
+// 	err = obj.updateObject()
+// 	if err == nil {
+// 		setResourceState(obj, d)
+// 	}
+// 	return err
+// }
 
-/* Simple helper routine to build an api_object struct
-   for the various calls terraform will use. Unfortunately,
-   terraform cannot just reuse objects, so each CRUD operation
-   results in a new object created */
-func makeAPIObject(d *schema.ResourceData, meta interface{}) (*APIObject, error) {
-	opts, err := buildAPIObjectOpts(d)
-	if err != nil {
-		return nil, err
-	}
+// func resourceProfileDelete(d *schema.ResourceData, meta interface{}) error {
+// 	obj, err := makeAPIObject(d, meta)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	log.Printf("resource_api_object.go: Delete routine called. Object built:\n%s\n", obj.toString())
 
-	caller := "unknown"
-	pc, _, _, ok := runtime.Caller(1)
-	details := runtime.FuncForPC(pc)
-	if ok && details != nil {
-		parts := strings.Split(details.Name(), ".")
-		caller = parts[len(parts)-1]
-	}
-	log.Printf("resource_rest_api.go: Constructing new APIObject in makeAPIObject (called by %s)", caller)
+// 	err = obj.deleteObject()
+// 	if err != nil {
+// 		if strings.Contains(err.Error(), "404") {
+// 			/* 404 means it doesn't exist. Call that good enough */
+// 			err = nil
+// 		}
+// 	}
+// 	return err
+// }
 
-	obj, err := NewAPIObject(meta.(*APIClient), opts)
+// func resourceProfileExists(d *schema.ResourceData, meta interface{}) (exists bool, err error) {
+// 	obj, err := makeAPIObject(d, meta)
+// 	if err != nil {
+// 		if strings.Contains(err.Error(), "error parsing data provided") {
+// 			log.Printf("resource_api_object.go: WARNING! The data passed from Terraform's state is invalid! %v", err)
+// 			log.Printf("resource_api_object.go: Continuing with partially constructed object...")
+// 		} else {
+// 			return exists, err
+// 		}
+// 	}
+// 	log.Printf("resource_api_object.go: Exists routine called. Object built: %s\n", obj.toString())
 
-	return obj, err
-}
+// 	/* Assume all errors indicate the object just doesn't exist.
+// 	This may not be a good assumption... */
+// 	err = obj.readObject()
+// 	if err == nil {
+// 		exists = true
+// 	}
+// 	return exists, err
+// }
 
-func buildAPIObjectOpts(d *schema.ResourceData) (*apiObjectOpts, error) {
-	opts := &apiObjectOpts{
-		path: d.Get("path").(string),
-	}
+// /* Simple helper routine to build an api_object struct
+//    for the various calls terraform will use. Unfortunately,
+//    terraform cannot just reuse objects, so each CRUD operation
+//    results in a new object created */
+// func makeAPIObject(d *schema.ResourceData, meta interface{}) (*APIObject, error) {
+// 	opts, err := buildAPIObjectOpts(d)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	/* Allow user to override provider-level id_attribute */
-	if v, ok := d.GetOk("id_attribute"); ok {
-		opts.idAttribute = v.(string)
-	}
+// 	caller := "unknown"
+// 	pc, _, _, ok := runtime.Caller(1)
+// 	details := runtime.FuncForPC(pc)
+// 	if ok && details != nil {
+// 		parts := strings.Split(details.Name(), ".")
+// 		caller = parts[len(parts)-1]
+// 	}
+// 	log.Printf("resource_rest_api.go: Constructing new APIObject in makeAPIObject (called by %s)", caller)
 
-	/* Allow user to specify the ID manually */
-	if v, ok := d.GetOk("object_id"); ok {
-		opts.id = v.(string)
-	} else {
-		/* If not specified, see if terraform has an ID */
-		opts.id = d.Id()
-	}
+// 	obj, err := NewAPIObject(meta.(*APIClient), opts)
 
-	log.Printf("resource_rest_api.go: buildAPIObjectOpts routine called for id '%s'\n", opts.id)
+// 	return obj, err
+// }
 
-	if v, ok := d.GetOk("create_path"); ok {
-		opts.postPath = v.(string)
-	}
-	if v, ok := d.GetOk("read_path"); ok {
-		opts.getPath = v.(string)
-	}
-	if v, ok := d.GetOk("update_path"); ok {
-		opts.putPath = v.(string)
-	}
-	if v, ok := d.GetOk("create_method"); ok {
-		opts.createMethod = v.(string)
-	}
-	if v, ok := d.GetOk("read_method"); ok {
-		opts.readMethod = v.(string)
-	}
-	if v, ok := d.GetOk("update_method"); ok {
-		opts.updateMethod = v.(string)
-	}
-	if v, ok := d.GetOk("destroy_method"); ok {
-		opts.destroyMethod = v.(string)
-	}
-	if v, ok := d.GetOk("destroy_path"); ok {
-		opts.deletePath = v.(string)
-	}
-	if v, ok := d.GetOk("query_string"); ok {
-		opts.queryString = v.(string)
-	}
+// func buildAPIObjectOpts(d *schema.ResourceData) (*apiObjectOpts, error) {
+// 	opts := &apiObjectOpts{
+// 		path: d.Get("path").(string),
+// 	}
 
-	readSearch := expandReadSearch(d.Get("read_search").(map[string]interface{}))
-	opts.readSearch = readSearch
+// 	/* Allow user to override provider-level id_attribute */
+// 	if v, ok := d.GetOk("id_attribute"); ok {
+// 		opts.idAttribute = v.(string)
+// 	}
 
-	opts.data = d.Get("data").(string)
-	opts.debug = d.Get("debug").(bool)
+// 	/* Allow user to specify the ID manually */
+// 	if v, ok := d.GetOk("object_id"); ok {
+// 		opts.id = v.(string)
+// 	} else {
+// 		/* If not specified, see if terraform has an ID */
+// 		opts.id = d.Id()
+// 	}
 
-	return opts, nil
-}
+// 	log.Printf("resource_rest_api.go: buildAPIObjectOpts routine called for id '%s'\n", opts.id)
 
-func expandReadSearch(v map[string]interface{}) (readSearch map[string]string) {
-	readSearch = make(map[string]string)
-	for key, val := range v {
-		readSearch[key] = val.(string)
-	}
+// 	if v, ok := d.GetOk("create_path"); ok {
+// 		opts.postPath = v.(string)
+// 	}
+// 	if v, ok := d.GetOk("read_path"); ok {
+// 		opts.getPath = v.(string)
+// 	}
+// 	if v, ok := d.GetOk("update_path"); ok {
+// 		opts.putPath = v.(string)
+// 	}
+// 	if v, ok := d.GetOk("create_method"); ok {
+// 		opts.createMethod = v.(string)
+// 	}
+// 	if v, ok := d.GetOk("read_method"); ok {
+// 		opts.readMethod = v.(string)
+// 	}
+// 	if v, ok := d.GetOk("update_method"); ok {
+// 		opts.updateMethod = v.(string)
+// 	}
+// 	if v, ok := d.GetOk("destroy_method"); ok {
+// 		opts.destroyMethod = v.(string)
+// 	}
+// 	if v, ok := d.GetOk("destroy_path"); ok {
+// 		opts.deletePath = v.(string)
+// 	}
+// 	if v, ok := d.GetOk("query_string"); ok {
+// 		opts.queryString = v.(string)
+// 	}
 
-	return
-}
+// 	readSearch := expandReadSearch(d.Get("read_search").(map[string]interface{}))
+// 	opts.readSearch = readSearch
+
+// 	opts.data = d.Get("data").(string)
+// 	opts.debug = d.Get("debug").(bool)
+
+// 	return opts, nil
+// }
+
+// func expandReadSearch(v map[string]interface{}) (readSearch map[string]string) {
+// 	readSearch = make(map[string]string)
+// 	for key, val := range v {
+// 		readSearch[key] = val.(string)
+// 	}
+
+// 	return
+// }
