@@ -1,6 +1,7 @@
 package restapi
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"regexp"
@@ -11,6 +12,11 @@ import (
 
 var radiusAttribute = &schema.Resource{
 	Schema: map[string]*schema.Schema{
+		"operator_id": &schema.Schema{
+			Type:         schema.TypeString,
+			Required:     true,
+			ValidateFunc: validation.StringIsNotWhiteSpace,
+		},
 		"name": &schema.Schema{
 			Type:         schema.TypeString,
 			Required:     true,
@@ -206,15 +212,28 @@ func resourceProfileCreate(d *schema.ResourceData, meta interface{}) error {
 	return resourceProfileRead(d, meta)
 }
 
-func getProfile(api *APIClient, id string) (obj *RadiusProfile, err error) {
+func getProfile(api *APIClient, operator_id string, id string) (obj *RadiusProfile, err error) {
+	path := fmt.Sprintf("/operator/%s/profile/%s", operator_id, id)
+	data, err := api.sendRequest("GET", path, "")
+	if err != nil {
+		return nil, err
+	}
+	res := RadiusProfile{}
+	err = json.Unmarshal([]byte(data), &res)
 
-	return nil, nil
+	if err != nil {
+		return nil, err
+	}
+
+	return &res, nil
 }
 
 func resourceProfileRead(d *schema.ResourceData, meta interface{}) error {
 	api := meta.(*APIClient)
 
-	obj, err := getProfile(api, d.Id())
+	operator_id := d.Get("operator_id").(string)
+
+	obj, err := getProfile(api, operator_id, d.Id())
 	if err != nil {
 		return err
 	}

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	fakeserver "github.com/Mastercard/terraform-provider-restapi/fakeserver"
+	"github.com/tpretz/terraform-provider-api-radius/fakeserver"
 )
 
 func main() {

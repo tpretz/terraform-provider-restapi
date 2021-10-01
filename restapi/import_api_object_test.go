@@ -4,8 +4,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/Mastercard/terraform-provider-restapi/fakeserver"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/tpretz/terraform-provider-api-radius/fakeserver"
 )
 
 func TestAccRestApiObject_importBasic(t *testing.T) {

@@ -13,3 +13,4 @@ tmp
 tmpgpg
 dist
 vendor
+terraform-provider-*
