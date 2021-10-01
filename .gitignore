@@ -14,3 +14,4 @@ tmpgpg
 dist
 vendor
 terraform-provider-*
+test_project

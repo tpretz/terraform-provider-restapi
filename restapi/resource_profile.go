@@ -12,11 +12,6 @@ import (
 
 var radiusAttribute = &schema.Resource{
 	Schema: map[string]*schema.Schema{
-		"operator_id": &schema.Schema{
-			Type:         schema.TypeString,
-			Required:     true,
-			ValidateFunc: validation.StringIsNotWhiteSpace,
-		},
 		"name": &schema.Schema{
 			Type:         schema.TypeString,
 			Required:     true,
@@ -59,8 +54,8 @@ func resourceProfile() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceProfileCreate,
 		Read:   resourceProfileRead,
-		//Update: resourceProfileUpdate,
-		//Delete: resourceProfileDelete,
+		Update: resourceProfileUpdate,
+		Delete: resourceProfileDelete,
 		//	Exists: resourceProfileExists,
 
 		Importer: &schema.ResourceImporter{
@@ -68,7 +63,12 @@ func resourceProfile() *schema.Resource {
 		},
 
 		Schema: map[string]*schema.Schema{
-			"id": {
+			"operator_id": &schema.Schema{
+				Type:         schema.TypeString,
+				Required:     true,
+				ValidateFunc: validation.StringIsNotWhiteSpace,
+			},
+			"profile_id": {
 				Type:         schema.TypeString,
 				Description:  "Profile ID",
 				Required:     true,
@@ -86,7 +86,8 @@ func resourceProfile() *schema.Resource {
 				Optional:     true,
 			},
 			"depends": {
-				Type: schema.TypeList,
+				Type:     schema.TypeList,
+				Optional: true,
 				Elem: &schema.Schema{
 					Type:         schema.TypeString,
 					ValidateFunc: validation.StringMatch(regexp.MustCompile("^[0-9a-z_]{3,32}$"), "must align to regex"),
@@ -142,7 +143,7 @@ type RadiusProfile struct {
 
 func buildProfileObject(d *schema.ResourceData, api *APIClient) (*RadiusProfile, error) {
 	itm := RadiusProfile{
-		ID:          d.Get("id").(string),
+		ID:          d.Get("profile_id").(string),
 		Weight:      d.Get("weight").(int),
 		Description: d.Get("description").(string), // move to optional
 	}
@@ -151,6 +152,9 @@ func buildProfileObject(d *schema.ResourceData, api *APIClient) (*RadiusProfile,
 	} else {
 		itm.State = "disabled"
 	}
+
+	operator_id := d.Get("operator_id").(string)
+	d.SetId(fmt.Sprintf("%s/%s", operator_id, itm.ID))
 
 	// optionals
 
@@ -214,10 +218,16 @@ func resourceProfileCreate(d *schema.ResourceData, meta interface{}) error {
 
 func getProfile(api *APIClient, operator_id string, id string) (obj *RadiusProfile, err error) {
 	path := fmt.Sprintf("/operator/%s/profile/%s", operator_id, id)
-	data, err := api.sendRequest("GET", path, "")
+	status, data, err := api.sendRequest("GET", path, "")
 	if err != nil {
 		return nil, err
 	}
+
+	// gone, return nothing
+	if status == 404 {
+		return nil, nil
+	}
+
 	res := RadiusProfile{}
 	err = json.Unmarshal([]byte(data), &res)
 
@@ -232,13 +242,21 @@ func resourceProfileRead(d *schema.ResourceData, meta interface{}) error {
 	api := meta.(*APIClient)
 
 	operator_id := d.Get("operator_id").(string)
+	profile_id := d.Get("profile_id").(string)
 
-	obj, err := getProfile(api, operator_id, d.Id())
+	obj, err := getProfile(api, operator_id, profile_id)
 	if err != nil {
 		return err
 	}
 
-	d.SetId(obj.ID)
+	// its gone
+	if obj == nil {
+		d.SetId("")
+		return nil
+	}
+
+	//d.SetId(fmt.Sprintf("%s/%s", operator_id, obj.ID))
+	d.Set("profile_id", obj.ID)
 	d.Set("enabled", obj.State == "enabled")
 	d.Set("weight", obj.Weight)
 	d.Set("description", obj.Description)
@@ -288,6 +306,18 @@ func resourceProfileRead(d *schema.ResourceData, meta interface{}) error {
 
 	//
 	//d.Set("parameter_schema")
+	return nil
+}
+
+func resourceProfileUpdate(d *schema.ResourceData, meta interface{}) error {
+	// api := meta.(*APIClient)
+	// operator_id := d.Get("operator_id").(string)
+
+	return nil
+}
+
+func resourceProfileDelete(d *schema.ResourceData, meta interface{}) error {
+
 	return nil
 }
 

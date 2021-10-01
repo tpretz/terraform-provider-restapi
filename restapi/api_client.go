@@ -144,7 +144,7 @@ func (client *APIClient) toString() string {
 
 /* Helper function that handles sending/receiving and handling
    of HTTP data in and out. */
-func (client *APIClient) sendRequest(method string, path string, data string) (string, error) {
+func (client *APIClient) sendRequest(method string, path string, data string) (int, string, error) {
 	fullURI := client.uri + path
 	var req *http.Request
 	var err error
@@ -168,7 +168,7 @@ func (client *APIClient) sendRequest(method string, path string, data string) (s
 
 	if err != nil {
 		log.Fatal(err)
-		return "", err
+		return 0, "", err
 	}
 
 	if client.debug {
@@ -186,7 +186,7 @@ func (client *APIClient) sendRequest(method string, path string, data string) (s
 		tokenSource := client.oauthConfig.TokenSource(context.Background())
 		token, err := tokenSource.Token()
 		if err != nil {
-			return "", err
+			return 0, "", err
 		}
 		req.Header.Set("Authorization", "Bearer "+token.AccessToken)
 	}
@@ -224,7 +224,7 @@ func (client *APIClient) sendRequest(method string, path string, data string) (s
 
 	if err != nil {
 		//log.Printf("api_client.go: Error detected: %s\n", err)
-		return "", err
+		return 0, "", err
 	}
 
 	if client.debug {
@@ -241,17 +241,17 @@ func (client *APIClient) sendRequest(method string, path string, data string) (s
 	resp.Body.Close()
 
 	if err2 != nil {
-		return "", err2
+		return 0, "", err2
 	}
 	body := string(bodyBytes)
 	if client.debug {
 		log.Printf("api_client.go: BODY:\n%s\n", body)
 	}
 
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return body, fmt.Errorf("unexpected response code '%d': %s", resp.StatusCode, body)
+	if (resp.StatusCode < 200 || resp.StatusCode >= 300) && resp.StatusCode != 404 {
+		return resp.StatusCode, body, fmt.Errorf("unexpected response code '%d': %s", resp.StatusCode, body)
 	}
 
-	return body, nil
+	return resp.StatusCode, body, nil
 
 }

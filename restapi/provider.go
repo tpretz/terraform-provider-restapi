@@ -76,7 +76,7 @@ func Provider() *schema.Provider {
 			/* Could only get terraform to recognize this resource if
 			         the name began with the provider's name and had at least
 				 one underscore. This is not documented anywhere I could find */
-			"radius_profile": resourceProfile(),
+			"apiradius_profile": resourceProfile(),
 		},
 		DataSourcesMap: map[string]*schema.Resource{},
 		ConfigureFunc:  configureProvider,
